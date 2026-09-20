@@ -1,0 +1,9 @@
+bin/
+obj/
+.vs/
+*.user
+*.suo
+recordings/
+src/BilinguaFlow.App/recordings/
+models/**/*
+!models/README.md

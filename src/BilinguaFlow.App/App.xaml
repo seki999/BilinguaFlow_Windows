@@ -1,0 +1,20 @@
+<Application x:Class="BilinguaFlow.App.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             ShutdownMode="OnExplicitShutdown">
+    <Application.Resources>
+        <SolidColorBrush x:Key="WindowBrush" Color="#F3F5F8"/>
+        <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="TextBrush" Color="#172033"/>
+        <SolidColorBrush x:Key="MutedBrush" Color="#687386"/>
+        <SolidColorBrush x:Key="AccentBrush" Color="#4467E8"/>
+        <SolidColorBrush x:Key="BorderBrush" Color="#DDE2EA"/>
+        <Style TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource TextBrush}"/></Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="MinHeight" Value="38"/><Setter Property="Padding" Value="10,5"/><Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="MinHeight" Value="40"/><Setter Property="MinWidth" Value="112"/><Setter Property="Padding" Value="18,7"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Cursor" Value="Hand"/>
+        </Style>
+    </Application.Resources>
+</Application>

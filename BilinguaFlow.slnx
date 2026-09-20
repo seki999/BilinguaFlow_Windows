@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BilinguaFlow.App/BilinguaFlow.App.csproj" />
+    <Project Path="src/BilinguaFlow.Asr/BilinguaFlow.Asr.csproj" />
+    <Project Path="src/BilinguaFlow.Audio/BilinguaFlow.Audio.csproj" />
+    <Project Path="src/BilinguaFlow.Core/BilinguaFlow.Core.csproj" />
+    <Project Path="src/BilinguaFlow.Infrastructure/BilinguaFlow.Infrastructure.csproj" />
+    <Project Path="src/BilinguaFlow.Llm/BilinguaFlow.Llm.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BilinguaFlow.Core.Tests/BilinguaFlow.Core.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BilinguaFlow.Core\BilinguaFlow.Core.csproj" />
+    <ProjectReference Include="..\BilinguaFlow.Audio\BilinguaFlow.Audio.csproj" />
+    <ProjectReference Include="..\BilinguaFlow.Asr\BilinguaFlow.Asr.csproj" />
+    <ProjectReference Include="..\BilinguaFlow.Llm\BilinguaFlow.Llm.csproj" />
+    <ProjectReference Include="..\BilinguaFlow.Infrastructure\BilinguaFlow.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>
