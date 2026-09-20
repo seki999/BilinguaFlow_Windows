@@ -30,6 +30,20 @@ public sealed class EnergyVadSegmenterTests
     }
 
     [Fact]
+    public void WhisperMovieProfile_UsesLongerNaturalSegmentsAndFallback()
+    {
+        var profile = SegmentationProfiles.For(CaptureMode.Movie, CaptureSource.System,
+            engine: AsrEngine.Whisper);
+
+        Assert.Equal(1_500, profile.MinimumRecognitionSegmentMilliseconds);
+        Assert.Equal(900, profile.EndSilenceMilliseconds);
+        Assert.Equal(12_000, profile.MaximumSegmentMilliseconds);
+        Assert.Equal(6_000, profile.ActivityFlushMilliseconds);
+        Assert.True(profile.EnableActivityFallback);
+        Assert.False(profile.UseZeroCrossingHeuristic);
+    }
+
+    [Fact]
     public void MovieFallback_SubmitsMeaningfulAudioAtThreeSeconds()
     {
         var options = TestOptions with

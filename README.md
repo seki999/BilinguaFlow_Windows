@@ -82,6 +82,48 @@ least 300 ms, followed by a short pause. SenseVoice emits final utterances after
    silence and may hold short speech for up to a 1.2 second merge window. Recognition
    also starts at the 12-second maximum segment.
 
+## ASR Engines
+
+The **ASR Engine** selector is locked during capture and offers:
+
+- **SenseVoice:** fast and lightweight, suited to minimum-latency transcription.
+- **Whisper:** heavier, but generally better at complete movie/dialogue sentences and an important alternative for difficult Japanese audio.
+
+The selected engine supplies the raw Japanese or English text to Qwen. Whisper translation
+mode is never enabled; Simplified Chinese remains Qwen's responsibility. Enable developer
+**ASR Compare Mode** to run the same primary audio segment through both engines. The two
+results appear as separate transcript items with their engine and timing; only the selected
+primary engine result is sent to Qwen.
+
+## Whisper Setup
+
+BilinguaFlow embeds whisper.cpp through the Whisper.net Windows CPU runtime. It does not
+use Python, a server, or cloud ASR, and it never downloads a model. Obtain the multilingual
+Whisper Small `ggml-small.bin` model from the official whisper.cpp model distribution and
+place it exactly at:
+
+```text
+models/whisper/ggml-small.bin
+```
+
+Select **Whisper**, choose Japanese or English explicitly, then press **Start**. Japanese is
+passed as `ja` and English as `en`; automatic language detection and Whisper translation are
+disabled. Movie Mode gives Whisper more natural phrases: 1.5-second recognition minimum,
+900 ms endpoint silence, and a conservative six-second activity fallback with a 12-second cap.
+
+To compare a 30–60 second Japanese movie clip, select the same playback endpoint and run it
+once with SenseVoice and once with Whisper. Compare kana, kanji, names, phrase boundaries,
+RTF, and the downstream Chinese result. Compare Mode can also show both engines for each
+selected-engine segment during one run.
+
+### Whisper troubleshooting
+
+1. **Whisper model not found:** verify the exact `models/whisper/ggml-small.bin` path.
+2. **Native runtime failure:** use Windows x64, install the Visual C++ 2022 x64 runtime, and verify the Whisper.net runtime files were copied beside the build.
+3. **Unsupported model:** use a whisper.cpp-compatible multilingual GGML model; English-only models cannot recognize Japanese.
+4. **Slow recognition:** Whisper Small is CPU-intensive; use the default half-CPU thread setting or configure fewer threads to keep Windows responsive.
+5. **SenseVoice works but Whisper does not:** stop capture, inspect the readable status/log error, correct the model/runtime issue, and select SenseVoice manually if needed.
+
 ## Qwen Setup
 
 BilinguaFlow uses the local `Qwen3-1.7B Q4_K_M` GGUF model through LLamaSharp and its

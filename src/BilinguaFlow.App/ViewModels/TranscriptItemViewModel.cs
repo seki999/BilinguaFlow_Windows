@@ -15,6 +15,8 @@ public sealed class TranscriptItemViewModel : ObservableObject
         SequenceId = sequenceId; Timestamp = result.Timestamp;
         Source = result.Source == CaptureSource.System ? "REMOTE" : "MIC";
         Language = result.Language; RawText = result.Text; _correctedText = result.Text;
+        AsrEngine = result.AsrEngine.ToString();
+        if (result.IsComparison) _llmStatus = "ASR comparison only — not sent to Qwen";
         _performance = $"{result.AudioDuration.TotalSeconds:F1}s audio · {result.ProcessingTime.TotalSeconds:F1}s ASR · RTF {result.RealTimeFactor:F2}";
     }
 
@@ -22,6 +24,7 @@ public sealed class TranscriptItemViewModel : ObservableObject
     public DateTimeOffset Timestamp { get; }
     public string Source { get; }
     public string Language { get; }
+    public string AsrEngine { get; }
     public string RawText { get; }
     public string CorrectedText { get => _correctedText; private set => SetProperty(ref _correctedText, value); }
     public string TranslatedText { get => _translatedText; private set => SetProperty(ref _translatedText, value); }

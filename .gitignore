@@ -8,4 +8,5 @@ src/BilinguaFlow.App/recordings/
 models/**/*
 models/**/*.gguf
 models/**/*.onnx
+models/**/*.bin
 !models/README.md

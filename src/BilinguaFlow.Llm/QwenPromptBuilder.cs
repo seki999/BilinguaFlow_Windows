@@ -27,6 +27,7 @@ public sealed class QwenPromptBuilder(QwenSettings settings)
             : "The source language is English. Correct obvious English ASR errors and preserve technical terms, names, numbers, and commands.";
         var body = new StringBuilder()
             .AppendLine(languageInstruction)
+            .AppendLine($"ASR engine: {request.AsrEngine}")
             .AppendLine($"Mode: {request.Mode}")
             .AppendLine($"Source: {request.Source}")
             .AppendLine($"Profile: {request.Profile.Name}")

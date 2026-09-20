@@ -24,23 +24,38 @@ public sealed record SpeechSegmentationOptions(
 
 public static class SegmentationProfiles
 {
-    public static SpeechSegmentationOptions For(CaptureMode mode, CaptureSource source, bool movieDebugMode = false) => (mode, source) switch
+    public static SpeechSegmentationOptions For(CaptureMode mode, CaptureSource source, bool movieDebugMode = false,
+        AsrEngine engine = AsrEngine.SenseVoice) => (mode, source, engine) switch
     {
-        (CaptureMode.Movie, _) => new(
+        (CaptureMode.Movie, _, AsrEngine.Whisper) => new(
+            MinimumSpeechMilliseconds: 500,
+            MinimumRecognitionSegmentMilliseconds: 1_500,
+            EndSilenceMilliseconds: 900,
+            MergeGapMilliseconds: 1_200,
+            PreRollMilliseconds: 250,
+            PostRollMilliseconds: 250,
+            MaximumSegmentMilliseconds: 12_000,
+            SpeechThreshold: 0.006f,
+            UseZeroCrossingHeuristic: false,
+            EnableActivityFallback: true,
+            ActivityFlushMilliseconds: movieDebugMode ? 3_000 : 6_000,
+            MeaningfulAudioRms: 0.0025f,
+            DebugFixedChunkMode: movieDebugMode),
+        (CaptureMode.Movie, _, _) => new(
             SpeechThreshold: 0.006f,
             UseZeroCrossingHeuristic: false,
             EnableActivityFallback: true,
             ActivityFlushMilliseconds: movieDebugMode ? 2_500 : 3_000,
             MeaningfulAudioRms: 0.0025f,
             DebugFixedChunkMode: movieDebugMode),
-        (CaptureMode.Microphone, _) => new(
+        (CaptureMode.Microphone, _, _) => new(
             MinimumSpeechMilliseconds: 350,
             MinimumRecognitionSegmentMilliseconds: 800,
             EndSilenceMilliseconds: 650,
             MergeGapMilliseconds: 900,
             PreRollMilliseconds: 200,
             PostRollMilliseconds: 200),
-        (CaptureMode.Meeting, CaptureSource.Microphone) => new(
+        (CaptureMode.Meeting, CaptureSource.Microphone, _) => new(
             MinimumSpeechMilliseconds: 400,
             MinimumRecognitionSegmentMilliseconds: 1_000,
             EndSilenceMilliseconds: 750,

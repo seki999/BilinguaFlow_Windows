@@ -23,13 +23,14 @@ public sealed class LlmPipelineTests
     public void Prompt_ContainsProfileLanguageContextAndJsonContract()
     {
         var prompt = new QwenPromptBuilder(Settings).Build(Request("現在の発話", SourceLanguage.Japanese,
-            ["one", "two", "three", "four"]));
+            ["one", "two", "three", "four"], engine: AsrEngine.Whisper));
 
         Assert.Contains("source language is Japanese", prompt);
         Assert.Contains("Terraform", prompt);
         Assert.DoesNotContain("1. one", prompt);
         Assert.Contains("1. two", prompt);
         Assert.Contains("Current ASR: 現在の発話", prompt);
+        Assert.Contains("ASR engine: Whisper", prompt);
         Assert.Contains("/no_think", prompt);
         Assert.Contains("correctedText", prompt);
     }
@@ -137,9 +138,9 @@ public sealed class LlmPipelineTests
     }
 
     private static LlmTranslationRequest Request(string text, SourceLanguage language = SourceLanguage.Japanese,
-        IReadOnlyList<string>? recent = null, long sequence = 1) => new(sequence, text, language, CaptureMode.Meeting,
+        IReadOnlyList<string>? recent = null, long sequence = 1, AsrEngine engine = AsrEngine.SenseVoice) => new(sequence, text, language, CaptureMode.Meeting,
         CaptureSource.System, ContextProfiles.JapaneseItMeeting, "migration", recent ?? [], DateTimeOffset.Now,
-        TimeSpan.FromSeconds(2), TimeSpan.FromMilliseconds(100));
+        TimeSpan.FromSeconds(2), TimeSpan.FromMilliseconds(100), engine);
 
     private sealed class BlockingLlmService : ILlmService
     {

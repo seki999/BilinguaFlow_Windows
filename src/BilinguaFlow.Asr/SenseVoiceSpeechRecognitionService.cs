@@ -12,6 +12,7 @@ public sealed class SenseVoiceSpeechRecognitionService(ILogger<SenseVoiceSpeechR
     private readonly SemaphoreSlim _gate = new(1, 1);
     private OfflineRecognizer? _recognizer;
     private SourceLanguage? _loadedLanguage;
+    public AsrEngine Engine => AsrEngine.SenseVoice;
     public bool IsInitialized => _recognizer is not null;
 
     public async Task<TimeSpan> InitializeAsync(SenseVoiceModelFiles files, SourceLanguage language, CancellationToken cancellationToken)

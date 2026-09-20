@@ -51,6 +51,25 @@ public sealed class SpeechPipelineTests
         Assert.Equal(SourceLanguage.Japanese, recognizer.LastLanguage);
         Assert.NotNull(result);
         Assert.Equal("Japanese", result.Language);
+        Assert.Equal(AsrEngine.SenseVoice, result.AsrEngine);
+    }
+
+    [Fact]
+    public async Task CompareMode_AssociatesPrimaryAndComparisonResultsWithoutReplacingPrimary()
+    {
+        var primary = new FakeRecognizer { ResultText = "primary", Engine = AsrEngine.SenseVoice };
+        var comparison = new FakeRecognizer { ResultText = "comparison", Engine = AsrEngine.Whisper };
+        await using var session = new TranscriptionSession(CaptureSource.System, primary,
+            NullLogger<TranscriptionSession>.Instance, new SpeechSegmentationOptions(MinimumZeroCrossingRate: 0), comparison);
+        var results = new List<RecognitionResult>();
+        session.ResultAvailable += (_, value) => results.Add(value);
+        await session.StartAsync(SourceLanguage.Japanese, CancellationToken.None);
+        session.TryEnqueue(CreateFloatChunk(Enumerable.Repeat(0.2f, 16_000 * 2).Concat(new float[16_000]).ToArray()));
+        await session.StopAsync(true).WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(2, results.Count);
+        Assert.Contains(results, x => x.AsrEngine == AsrEngine.SenseVoice && !x.IsComparison && x.Text == "primary");
+        Assert.Contains(results, x => x.AsrEngine == AsrEngine.Whisper && x.IsComparison && x.Text == "comparison");
     }
 
     [Fact]
@@ -84,6 +103,7 @@ public sealed class SpeechPipelineTests
 
     private sealed class FakeRecognizer : ISpeechRecognitionService
     {
+        public AsrEngine Engine { get; init; } = AsrEngine.SenseVoice;
         public bool IsInitialized => true;
         public string ResultText { get; init; } = string.Empty;
         public SourceLanguage? LastLanguage { get; private set; }

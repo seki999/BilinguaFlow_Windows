@@ -11,6 +11,7 @@ public sealed class TranscriptionSession : ITranscriptionSession
 {
     private const int Capacity = 64;
     private readonly ISpeechRecognitionService _recognizer;
+    private readonly ISpeechRecognitionService? _comparisonRecognizer;
     private readonly ILogger<TranscriptionSession> _logger;
     private readonly SpeechSegmentationOptions _segmentationOptions;
     private readonly AudioPreprocessor _preprocessor = new();
@@ -30,8 +31,9 @@ public sealed class TranscriptionSession : ITranscriptionSession
     private int _queueWarningIssued;
 
     public TranscriptionSession(CaptureSource source, ISpeechRecognitionService recognizer,
-        ILogger<TranscriptionSession> logger, SpeechSegmentationOptions? segmentationOptions = null)
-    { Source = source; _recognizer = recognizer; _logger = logger; _segmentationOptions = segmentationOptions ?? new(); }
+        ILogger<TranscriptionSession> logger, SpeechSegmentationOptions? segmentationOptions = null,
+        ISpeechRecognitionService? comparisonRecognizer = null)
+    { Source = source; _recognizer = recognizer; _comparisonRecognizer = comparisonRecognizer; _logger = logger; _segmentationOptions = segmentationOptions ?? new(); }
 
     public CaptureSource Source { get; }
     public event EventHandler<RecognitionResult>? ResultAvailable;
@@ -119,8 +121,8 @@ public sealed class TranscriptionSession : ITranscriptionSession
         Interlocked.Increment(ref _submitted);
         var languageCode = _language == SourceLanguage.Japanese ? "ja" : "en";
         _logger.LogInformation(
-            "Submitting {Source} segment to SenseVoice: duration {Duration:F2}s, RMS {Rms:F5}, language {Language} ({LanguageCode}), reason {Reason}",
-            Source, duration.TotalSeconds, segment.Rms, _language, languageCode, SubmissionReasonLabel(segment.SubmissionReason));
+            "Submitting {Source} segment to {Engine}: duration {Duration:F2}s, RMS {Rms:F5}, language {Language} ({LanguageCode}), reason {Reason}",
+            Source, _recognizer.Engine, duration.TotalSeconds, segment.Rms, _language, languageCode, SubmissionReasonLabel(segment.SubmissionReason));
         PublishDiagnostics();
         StatusChanged?.Invoke(this, "Recognizing...");
         var stopwatch = Stopwatch.StartNew();
@@ -128,14 +130,34 @@ public sealed class TranscriptionSession : ITranscriptionSession
         stopwatch.Stop();
         Interlocked.Increment(ref _completed);
         PublishDiagnostics();
-        _logger.LogInformation("Recognized {Source} {Language} utterance ({AudioMs} ms) in {ProcessingMs} ms, RTF {Rtf:F2}, merged {MergedCount}",
-            Source, _language, duration.TotalMilliseconds, stopwatch.ElapsedMilliseconds,
+        _logger.LogInformation("Recognized {Source} {Engine} {Language} utterance ({AudioMs} ms) in {ProcessingMs} ms, RTF {Rtf:F2}, merged {MergedCount}",
+            Source, _recognizer.Engine, _language, duration.TotalMilliseconds, stopwatch.ElapsedMilliseconds,
             stopwatch.Elapsed.TotalSeconds / duration.TotalSeconds, segment.OriginalSegmentCount);
         if (!string.IsNullOrWhiteSpace(text))
             ResultAvailable?.Invoke(this, new RecognitionResult(DateTimeOffset.Now, Source,
                 _language == SourceLanguage.Japanese ? "Japanese" : "English", text, true, duration,
-                stopwatch.Elapsed, segment.WasMerged, segment.OriginalSegmentCount));
+                stopwatch.Elapsed, segment.WasMerged, segment.OriginalSegmentCount, _recognizer.Engine));
+        if (_comparisonRecognizer is not null)
+            await RecognizeComparisonAsync(segment, cancellationToken).ConfigureAwait(false);
         StatusChanged?.Invoke(this, "Listening...");
+    }
+
+    private async Task RecognizeComparisonAsync(SpeechSegment segment, CancellationToken cancellationToken)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            var text = await _comparisonRecognizer!.RecognizeAsync(segment.Samples, _language, cancellationToken).ConfigureAwait(false);
+            stopwatch.Stop();
+            _logger.LogInformation("ASR comparison: audio {AudioSeconds:F1}s, engine {Engine}, language {Language}, time {AsrSeconds:F2}s, RTF {Rtf:F2}",
+                segment.Duration.TotalSeconds, _comparisonRecognizer.Engine, _language, stopwatch.Elapsed.TotalSeconds,
+                stopwatch.Elapsed.TotalSeconds / segment.Duration.TotalSeconds);
+            if (!string.IsNullOrWhiteSpace(text))
+                ResultAvailable?.Invoke(this, new RecognitionResult(DateTimeOffset.Now, Source,
+                    _language == SourceLanguage.Japanese ? "Japanese" : "English", text, true, segment.Duration,
+                    stopwatch.Elapsed, segment.WasMerged, segment.OriginalSegmentCount, _comparisonRecognizer.Engine, true));
+        }
+        catch (Exception ex) { _logger.LogWarning(ex, "Comparison ASR {Engine} failed without affecting primary ASR", _comparisonRecognizer!.Engine); }
     }
 
     private void OnSegmentationDiagnostic(object? sender, SegmentationEvent e)

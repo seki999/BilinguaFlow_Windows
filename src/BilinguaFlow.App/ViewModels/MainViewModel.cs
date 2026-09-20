@@ -18,7 +18,9 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     private readonly IAudioDeviceService _devices;
     private readonly IAudioCaptureSessionFactory _audioSessionFactory;
     private readonly ITranscriptionSessionFactory _transcriptionSessionFactory;
-    private readonly ISpeechRecognitionService _recognizer;
+    private readonly SenseVoiceSpeechRecognitionService _senseVoice;
+    private readonly WhisperSpeechRecognitionService _whisper;
+    private readonly WhisperSettings _whisperSettings;
     private readonly ILlmService _llmService;
     private readonly LlmTranslationWorker _llmWorker;
     private readonly QwenSettings _qwenSettings;
@@ -35,10 +37,12 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     private CancellationTokenSource? _captureCancellation;
     private SelectionOption<CaptureMode>? _selectedMode;
     private SelectionOption<SourceLanguage>? _selectedLanguage;
+    private SelectionOption<AsrEngine>? _selectedAsrEngine;
     private AudioDevice? _selectedOutputDevice;
     private AudioDevice? _selectedInputDevice;
     private bool _isCapturing;
     private bool _movieAsrDebugMode;
+    private bool _asrCompareMode;
     private bool _showRawAsr = true;
     private ContextProfile? _selectedProfile;
     private string _additionalContext = "";
@@ -49,25 +53,28 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     private float _microphoneAudioLevel;
 
     public MainViewModel(IAudioDeviceService devices, IAudioCaptureSessionFactory audioSessionFactory,
-        ITranscriptionSessionFactory transcriptionSessionFactory, ISpeechRecognitionService recognizer,
+        ITranscriptionSessionFactory transcriptionSessionFactory, SenseVoiceSpeechRecognitionService senseVoice,
+        WhisperSpeechRecognitionService whisper, WhisperSettings whisperSettings,
         ILlmService llmService, LlmTranslationWorker llmWorker, QwenSettings qwenSettings,
         IRecordingPathFactory paths, ISystemClock clock, ILogger<MainViewModel> logger)
     {
         _devices = devices; _audioSessionFactory = audioSessionFactory; _transcriptionSessionFactory = transcriptionSessionFactory;
-        _recognizer = recognizer; _llmService = llmService; _llmWorker = llmWorker; _qwenSettings = qwenSettings;
+        _senseVoice = senseVoice; _whisper = whisper; _whisperSettings = whisperSettings;
+        _llmService = llmService; _llmWorker = llmWorker; _qwenSettings = qwenSettings;
         _paths = paths; _clock = clock; _logger = logger;
         _modelFiles = SenseVoiceModelLocator.Locate(AppContext.BaseDirectory);
         StartCommand = new AsyncRelayCommand(StartAsync, CanStart);
         StopCommand = new AsyncRelayCommand(StopAsync, () => IsCapturing);
         RefreshDevicesCommand = new AsyncRelayCommand(RefreshDevicesAsync, () => !IsCapturing);
         ClearTranscriptCommand = new AsyncRelayCommand(ClearTranscriptAsync, () => TranscriptItems.Count > 0);
-        SelectedMode = Modes[0]; SelectedLanguage = Languages[0];
+        SelectedMode = Modes[0]; SelectedLanguage = Languages[0]; SelectedAsrEngine = AsrEngines[0];
         _llmWorker.ResultAvailable += OnLlmResult;
         _llmWorker.DiagnosticsChanged += OnLlmDiagnostics;
     }
 
     public IReadOnlyList<SelectionOption<CaptureMode>> Modes { get; } = [new(CaptureMode.Movie, "Movie Mode"), new(CaptureMode.Meeting, "Meeting Mode"), new(CaptureMode.Microphone, "Microphone Mode")];
     public IReadOnlyList<SelectionOption<SourceLanguage>> Languages { get; } = [new(SourceLanguage.English, "English"), new(SourceLanguage.Japanese, "Japanese")];
+    public IReadOnlyList<SelectionOption<AsrEngine>> AsrEngines { get; } = [new(AsrEngine.SenseVoice, "SenseVoice"), new(AsrEngine.Whisper, "Whisper")];
     public IReadOnlyList<ContextProfile> Profiles { get; } = ContextProfiles.All;
     public ObservableCollection<AudioDevice> OutputDevices { get; } = [];
     public ObservableCollection<AudioDevice> InputDevices { get; } = [];
@@ -79,11 +86,13 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
 
     public SelectionOption<CaptureMode>? SelectedMode { get => _selectedMode; set { if (SetProperty(ref _selectedMode, value)) { OnPropertyChanged(nameof(NeedsSystemAudio)); OnPropertyChanged(nameof(NeedsMicrophone)); SelectDefaultProfile(); RaiseCommands(); } } }
     public SelectionOption<SourceLanguage>? SelectedLanguage { get => _selectedLanguage; set { if (SetProperty(ref _selectedLanguage, value)) SelectDefaultProfile(); } }
+    public SelectionOption<AsrEngine>? SelectedAsrEngine { get => _selectedAsrEngine; set { if (SetProperty(ref _selectedAsrEngine, value)) RaiseCommands(); } }
     public AudioDevice? SelectedOutputDevice { get => _selectedOutputDevice; set { if (SetProperty(ref _selectedOutputDevice, value)) RaiseCommands(); } }
     public AudioDevice? SelectedInputDevice { get => _selectedInputDevice; set { if (SetProperty(ref _selectedInputDevice, value)) RaiseCommands(); } }
     public bool IsCapturing { get => _isCapturing; private set { if (SetProperty(ref _isCapturing, value)) RaiseCommands(); } }
     public bool CanChangeSettings => !IsCapturing;
     public bool MovieAsrDebugMode { get => _movieAsrDebugMode; set => SetProperty(ref _movieAsrDebugMode, value); }
+    public bool AsrCompareMode { get => _asrCompareMode; set => SetProperty(ref _asrCompareMode, value); }
     public bool ShowRawAsr { get => _showRawAsr; set => SetProperty(ref _showRawAsr, value); }
     public ContextProfile? SelectedProfile { get => _selectedProfile; set => SetProperty(ref _selectedProfile, value); }
     public string AdditionalContext { get => _additionalContext; set => SetProperty(ref _additionalContext, value); }
@@ -91,6 +100,8 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     public string Diagnostics { get => _diagnostics; private set => SetProperty(ref _diagnostics, value); }
     public string ModelDirectory => _modelFiles.Directory;
     public bool IsModelAvailable => _modelFiles.Exists;
+    public string WhisperModelPath => _whisperSettings.ModelPath;
+    public bool IsWhisperModelAvailable => File.Exists(WhisperModelPath);
     public string QwenModelPath => _qwenSettings.ModelPath;
     public bool IsQwenModelAvailable => File.Exists(_qwenSettings.ModelPath);
     public float SystemAudioLevel { get => _systemAudioLevel; private set => SetProperty(ref _systemAudioLevel, value); }
@@ -117,7 +128,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         catch (Exception ex) { _logger.LogError(ex, "Unable to enumerate audio devices"); Status = $"Device error: {ex.Message}"; }
     }
 
-    private bool CanStart() => !IsCapturing && SelectedMode is not null && SelectedLanguage is not null &&
+    private bool CanStart() => !IsCapturing && SelectedMode is not null && SelectedLanguage is not null && SelectedAsrEngine is not null &&
         (!NeedsSystemAudio || SelectedOutputDevice is not null) && (!NeedsMicrophone || SelectedInputDevice is not null);
 
     private async Task StartAsync()
@@ -126,12 +137,17 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         try
         {
             if (IsCapturing) return;
-            if (!IsModelAvailable) { Status = $"SenseVoice model not found. Expected: {ModelDirectory}"; return; }
-            Status = "Loading SenseVoice model...";
+            if ((SelectedAsrEngine!.Value == AsrEngine.SenseVoice || AsrCompareMode) && !IsModelAvailable) { Status = $"SenseVoice model not found. Expected: {ModelDirectory}"; return; }
+            if ((SelectedAsrEngine.Value == AsrEngine.Whisper || AsrCompareMode) && !IsWhisperModelAvailable) { Status = $"Whisper model not found. Expected: {WhisperModelPath}"; return; }
+            Status = $"Loading {SelectedAsrEngine.Value} model...";
             _captureCancellation = new CancellationTokenSource();
             var token = _captureCancellation.Token;
-            var initializationTime = await _recognizer.InitializeAsync(_modelFiles, SelectedLanguage!.Value, token);
-            Diagnostics = initializationTime == TimeSpan.Zero ? "SenseVoice ready (cached)" : $"ASR initialized in {initializationTime.TotalSeconds:F1}s";
+            var primary = GetRecognizer(SelectedAsrEngine.Value);
+            var initializationTime = await primary.InitializeAsync(_modelFiles, SelectedLanguage!.Value, token);
+            if (AsrCompareMode)
+                await GetRecognizer(SelectedAsrEngine.Value == AsrEngine.SenseVoice ? AsrEngine.Whisper : AsrEngine.SenseVoice)
+                    .InitializeAsync(_modelFiles, SelectedLanguage.Value, token);
+            Diagnostics = initializationTime == TimeSpan.Zero ? $"{SelectedAsrEngine.Value} ready (cached)" : $"ASR initialized in {initializationTime.TotalSeconds:F1}s";
             if (!_llmService.IsReady)
             {
                 if (!IsQwenModelAvailable) Status = $"Qwen model not found. Expected: {QwenModelPath}";
@@ -165,7 +181,8 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
 
     private async Task StartTranscriptionAsync(CaptureSource source, CancellationToken token)
     {
-        var session = _transcriptionSessionFactory.Create(source, SelectedMode!.Value, MovieAsrDebugMode);
+        var session = _transcriptionSessionFactory.Create(source, SelectedMode!.Value, SelectedAsrEngine!.Value,
+            MovieAsrDebugMode, AsrCompareMode);
         session.ResultAvailable += OnRecognitionResult;
         session.StatusChanged += OnAsrStatusChanged;
         session.DiagnosticsChanged += OnDiagnosticsChanged;
@@ -234,12 +251,22 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     private void OnRecognitionResult(object? sender, RecognitionResult result)
     {
         var sequence = Interlocked.Increment(ref _sequence);
+        if (result.IsComparison)
+        {
+            Application.Current.Dispatcher.BeginInvoke(() =>
+            {
+                TranscriptItems.Add(TranscriptItemViewModel.FromResult(sequence, result));
+                while (TranscriptItems.Count > TranscriptLimit) TranscriptItems.RemoveAt(0);
+                ClearTranscriptCommand.RaiseCanExecuteChanged();
+            });
+            return;
+        }
         var profile = SelectedProfile ?? ContextProfiles.DefaultFor(SelectedMode!.Value, SelectedLanguage!.Value);
         List<string> recent;
         lock (_recentContext) recent = [.. _recentContext];
         var request = new LlmTranslationRequest(sequence, result.Text, SelectedLanguage!.Value, SelectedMode!.Value,
             result.Source, profile, AdditionalContext, recent, result.Timestamp - result.ProcessingTime,
-            result.AudioDuration, result.ProcessingTime);
+            result.AudioDuration, result.ProcessingTime, result.AsrEngine);
         Application.Current.Dispatcher.BeginInvoke(() =>
         {
             TranscriptItems.Add(TranscriptItemViewModel.FromResult(sequence, result));
@@ -322,6 +349,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         if (_selectedMode is null || _selectedLanguage is null) return;
         SelectedProfile = ContextProfiles.DefaultFor(_selectedMode.Value, _selectedLanguage.Value);
     }
+    private ISpeechRecognitionService GetRecognizer(AsrEngine engine) => engine == AsrEngine.Whisper ? _whisper : _senseVoice;
     private static string FriendlyError(Exception ex) => ex switch
     {
         FileNotFoundException => ex.Message,
@@ -335,6 +363,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     {
         await StopAsync();
         _llmWorker.ResultAvailable -= OnLlmResult; _llmWorker.DiagnosticsChanged -= OnLlmDiagnostics;
-        await _llmWorker.DisposeAsync(); await _llmService.DisposeAsync(); await _recognizer.DisposeAsync(); _lifecycleGate.Dispose();
+        await _llmWorker.DisposeAsync(); await _llmService.DisposeAsync();
+        await _senseVoice.DisposeAsync(); await _whisper.DisposeAsync(); _lifecycleGate.Dispose();
     }
 }

@@ -9,7 +9,9 @@ public sealed record SenseVoiceModelFiles(string Directory, string ModelPath, st
 }
 
 public sealed record RecognitionResult(DateTimeOffset Timestamp, CaptureSource Source, string Language, string Text,
-    bool IsFinal, TimeSpan AudioDuration, TimeSpan ProcessingTime, bool WasMerged = false, int OriginalSegmentCount = 1)
+    bool IsFinal, TimeSpan AudioDuration, TimeSpan ProcessingTime, bool WasMerged = false, int OriginalSegmentCount = 1,
+    AsrEngine AsrEngine = AsrEngine.SenseVoice, bool IsComparison = false,
+    float? AverageLogProbability = null, float? NoSpeechProbability = null)
 {
     public double RealTimeFactor => AudioDuration.TotalSeconds <= 0 ? 0 : ProcessingTime.TotalSeconds / AudioDuration.TotalSeconds;
 }
@@ -27,6 +29,7 @@ public sealed record TranscriptionDiagnostics(
 
 public interface ISpeechRecognitionService : IAsyncDisposable
 {
+    AsrEngine Engine { get; }
     bool IsInitialized { get; }
     Task<TimeSpan> InitializeAsync(SenseVoiceModelFiles files, SourceLanguage language, CancellationToken cancellationToken);
     Task<string> RecognizeAsync(float[] samples, SourceLanguage language, CancellationToken cancellationToken);
@@ -45,7 +48,8 @@ public interface ITranscriptionSession : IAsyncDisposable
 
 public interface ITranscriptionSessionFactory
 {
-    ITranscriptionSession Create(CaptureSource source, CaptureMode mode, bool movieDebugMode = false);
+    ITranscriptionSession Create(CaptureSource source, CaptureMode mode, AsrEngine engine,
+        bool movieDebugMode = false, bool compareMode = false);
 }
 
 public sealed record LlmTranslationRequest(
@@ -59,7 +63,8 @@ public sealed record LlmTranslationRequest(
     IReadOnlyList<string> RecentUtterances,
     DateTimeOffset SegmentCompletedAt,
     TimeSpan AudioDuration,
-    TimeSpan AsrProcessingTime);
+    TimeSpan AsrProcessingTime,
+    AsrEngine AsrEngine = AsrEngine.SenseVoice);
 
 public sealed record LlmTranslationResult(
     long SequenceId,

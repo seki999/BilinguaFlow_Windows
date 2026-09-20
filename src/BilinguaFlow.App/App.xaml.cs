@@ -21,7 +21,9 @@ public partial class App : Application
         {
             services.AddSingleton<IAudioDeviceService, WasapiAudioDeviceService>();
             services.AddSingleton<IAudioCaptureSessionFactory, AudioCaptureSessionFactory>();
-            services.AddSingleton<ISpeechRecognitionService, SenseVoiceSpeechRecognitionService>();
+            services.AddSingleton<SenseVoiceSpeechRecognitionService>();
+            services.AddSingleton(_ => new WhisperSettings(WhisperModelLocator.Locate(AppContext.BaseDirectory)));
+            services.AddSingleton<WhisperSpeechRecognitionService>();
             services.AddSingleton<ITranscriptionSessionFactory, TranscriptionSessionFactory>();
             services.AddSingleton(_ => new QwenSettings(QwenModelLocator.Locate(AppContext.BaseDirectory)));
             services.AddSingleton<ILlmService, QwenLlamaService>();
