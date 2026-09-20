@@ -8,6 +8,7 @@ namespace BilinguaFlow.Asr;
 public sealed class TranscriptionSessionFactory(ISpeechRecognitionService recognizer, ILoggerFactory loggerFactory)
     : ITranscriptionSessionFactory
 {
-    public ITranscriptionSession Create(CaptureSource source, CaptureMode mode) =>
-        new TranscriptionSession(source, recognizer, loggerFactory.CreateLogger<TranscriptionSession>(), SegmentationProfiles.For(mode, source));
+    public ITranscriptionSession Create(CaptureSource source, CaptureMode mode, bool movieDebugMode = false) =>
+        new TranscriptionSession(source, recognizer, loggerFactory.CreateLogger<TranscriptionSession>(),
+            SegmentationProfiles.For(mode, source, movieDebugMode));
 }

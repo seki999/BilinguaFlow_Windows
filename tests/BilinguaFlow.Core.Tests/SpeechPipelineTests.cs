@@ -53,6 +53,28 @@ public sealed class SpeechPipelineTests
         Assert.Equal("Japanese", result.Language);
     }
 
+    [Fact]
+    public async Task Session_PublishesMoviePipelineDiagnostics()
+    {
+        var recognizer = new FakeRecognizer();
+        var options = SegmentationProfiles.For(CaptureMode.Movie, CaptureSource.System, movieDebugMode: true);
+        await using var session = new TranscriptionSession(CaptureSource.System, recognizer,
+            NullLogger<TranscriptionSession>.Instance, options);
+        TranscriptionDiagnostics? latest = null;
+        session.DiagnosticsChanged += (_, value) => latest = value;
+        await session.StartAsync(SourceLanguage.Japanese, CancellationToken.None);
+        Assert.True(session.TryEnqueue(CreateFloatChunk(Enumerable.Repeat(0.1f, 16_000 * 3).ToArray())));
+
+        await session.StopAsync(true).WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.NotNull(latest);
+        Assert.Equal(1, latest.CapturedAudioChunks);
+        Assert.True(latest.SpeechSegmentsDetected >= 1);
+        Assert.True(latest.SubmittedSegments >= 1);
+        Assert.Equal(latest.SubmittedSegments, latest.CompletedRecognitions);
+        Assert.Equal(SourceLanguage.Japanese, recognizer.LastLanguage);
+    }
+
     private static AudioChunk CreateFloatChunk(float[] samples)
     {
         var bytes = new byte[samples.Length * sizeof(float)];

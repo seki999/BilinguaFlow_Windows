@@ -1,4 +1,5 @@
 # Local LLM adapter
 
-Milestone 5 will implement `ILlmService` with Qwen3-1.7B Q4 GGUF and llama.cpp.
-It will produce structured corrected and Simplified Chinese translated text.
+This project loads Qwen3-1.7B Q4_K_M directly in-process through LLamaSharp's CPU
+llama.cpp backend. It owns prompt construction, non-thinking single-pass correction and
+translation, defensive JSON parsing, and a bounded serialized translation worker.

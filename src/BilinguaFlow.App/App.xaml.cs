@@ -5,6 +5,7 @@ using BilinguaFlow.Audio;
 using BilinguaFlow.Asr;
 using BilinguaFlow.Core.Audio;
 using BilinguaFlow.Infrastructure;
+using BilinguaFlow.Llm;
 using BilinguaFlow.Core.Speech;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -22,6 +23,9 @@ public partial class App : Application
             services.AddSingleton<IAudioCaptureSessionFactory, AudioCaptureSessionFactory>();
             services.AddSingleton<ISpeechRecognitionService, SenseVoiceSpeechRecognitionService>();
             services.AddSingleton<ITranscriptionSessionFactory, TranscriptionSessionFactory>();
+            services.AddSingleton(_ => new QwenSettings(QwenModelLocator.Locate(AppContext.BaseDirectory)));
+            services.AddSingleton<ILlmService, QwenLlamaService>();
+            services.AddSingleton<LlmTranslationWorker>();
             services.AddSingleton<ISystemClock, SystemClock>();
             services.AddSingleton<IRecordingPathFactory>(_ => new RecordingPathFactory(Path.Combine(AppContext.BaseDirectory, "recordings")));
             services.AddSingleton<MainViewModel>();

@@ -6,4 +6,6 @@ obj/
 recordings/
 src/BilinguaFlow.App/recordings/
 models/**/*
+models/**/*.gguf
+models/**/*.onnx
 !models/README.md

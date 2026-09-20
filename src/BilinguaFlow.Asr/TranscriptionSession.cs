@@ -20,6 +20,12 @@ public sealed class TranscriptionSession : ITranscriptionSession
     private SourceLanguage _language;
     private int _queueLength;
     private long _dropped;
+    private long _captured;
+    private long _speechDetected;
+    private long _rejected;
+    private long _buffered;
+    private long _submitted;
+    private long _completed;
 
     private int _queueWarningIssued;
 
@@ -47,6 +53,7 @@ public sealed class TranscriptionSession : ITranscriptionSession
 
     public bool TryEnqueue(AudioChunk chunk)
     {
+        Interlocked.Increment(ref _captured);
         var channel = _channel;
         if (channel is null || _worker is null) return false;
         if (channel.Writer.TryWrite(chunk))
@@ -109,10 +116,18 @@ public sealed class TranscriptionSession : ITranscriptionSession
     private async Task RecognizeAsync(SpeechSegment segment, CancellationToken cancellationToken)
     {
         var duration = segment.Duration;
+        Interlocked.Increment(ref _submitted);
+        var languageCode = _language == SourceLanguage.Japanese ? "ja" : "en";
+        _logger.LogInformation(
+            "Submitting {Source} segment to SenseVoice: duration {Duration:F2}s, RMS {Rms:F5}, language {Language} ({LanguageCode}), reason {Reason}",
+            Source, duration.TotalSeconds, segment.Rms, _language, languageCode, SubmissionReasonLabel(segment.SubmissionReason));
+        PublishDiagnostics();
         StatusChanged?.Invoke(this, "Recognizing...");
         var stopwatch = Stopwatch.StartNew();
         var text = await _recognizer.RecognizeAsync(segment.Samples, _language, cancellationToken).ConfigureAwait(false);
         stopwatch.Stop();
+        Interlocked.Increment(ref _completed);
+        PublishDiagnostics();
         _logger.LogInformation("Recognized {Source} {Language} utterance ({AudioMs} ms) in {ProcessingMs} ms, RTF {Rtf:F2}, merged {MergedCount}",
             Source, _language, duration.TotalMilliseconds, stopwatch.ElapsedMilliseconds,
             stopwatch.Elapsed.TotalSeconds / duration.TotalSeconds, segment.OriginalSegmentCount);
@@ -125,9 +140,26 @@ public sealed class TranscriptionSession : ITranscriptionSession
 
     private void OnSegmentationDiagnostic(object? sender, SegmentationEvent e)
     {
-        if (e.IsRejection) _logger.LogDebug("{Source}: {Message}", Source, e.Message);
+        switch (e.Kind)
+        {
+            case SegmentationEventKind.SpeechDetected: Interlocked.Increment(ref _speechDetected); break;
+            case SegmentationEventKind.Rejected: Interlocked.Increment(ref _rejected); break;
+            case SegmentationEventKind.Buffered: Interlocked.Increment(ref _buffered); break;
+        }
+        if (e.Kind == SegmentationEventKind.Rejected) _logger.LogDebug("{Source}: {Message}", Source, e.Message);
         else _logger.LogInformation("{Source}: {Message}", Source, e.Message);
+        PublishDiagnostics();
     }
+
+    private static string SubmissionReasonLabel(SegmentSubmissionReason reason) => reason switch
+    {
+        SegmentSubmissionReason.VadEnd => "VAD-end",
+        SegmentSubmissionReason.Timeout => "timeout",
+        SegmentSubmissionReason.MaxLength => "max-length",
+        SegmentSubmissionReason.StopFlush => "Stop-flush",
+        SegmentSubmissionReason.DebugChunk => "debug-chunk",
+        _ => reason.ToString()
+    };
 
     private void WarnIfQueueIsGrowing()
     {
@@ -139,7 +171,9 @@ public sealed class TranscriptionSession : ITranscriptionSession
     }
 
     private void PublishDiagnostics() => DiagnosticsChanged?.Invoke(this,
-        new TranscriptionDiagnostics(Math.Max(0, Volatile.Read(ref _queueLength)), Interlocked.Read(ref _dropped)));
+        new TranscriptionDiagnostics(Math.Max(0, Volatile.Read(ref _queueLength)), Interlocked.Read(ref _dropped),
+            Interlocked.Read(ref _captured), Interlocked.Read(ref _speechDetected), Interlocked.Read(ref _rejected),
+            Interlocked.Read(ref _buffered), Interlocked.Read(ref _submitted), Interlocked.Read(ref _completed)));
 
     public async Task StopAsync(bool flushPending = true, CancellationToken cancellationToken = default)
     {

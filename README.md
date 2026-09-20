@@ -2,8 +2,8 @@
 
 BilinguaFlow is a local-first Windows desktop application for real-time English and
 Japanese recognition, context-aware correction, and Simplified Chinese bilingual
-subtitles. Milestone 2 provides local original-language transcription. Translation and
-the LLM are intentionally not enabled yet.
+subtitles. Milestone 3 adds an in-process Qwen/llama.cpp translation pipeline; no cloud
+API or manually launched model server is used.
 
 ## Architecture
 
@@ -21,7 +21,7 @@ src/
   BilinguaFlow.Core            Domain models and service contracts
   BilinguaFlow.Audio           NAudio/WASAPI adapters
   BilinguaFlow.Asr             SenseVoice/sherpa-onnx adapter, preprocessing, VAD
-  BilinguaFlow.Llm             Future local LLM adapter
+  BilinguaFlow.Llm             Qwen/LLamaSharp adapter, prompts, parsing, bounded queue
   BilinguaFlow.Infrastructure  System services
 tests/
   BilinguaFlow.Core.Tests      Hardware-independent tests
@@ -82,7 +82,39 @@ least 300 ms, followed by a short pause. SenseVoice emits final utterances after
    silence and may hold short speech for up to a 1.2 second merge window. Recognition
    also starts at the 12-second maximum segment.
 
-## Implemented through Milestone 2
+## Qwen Setup
+
+BilinguaFlow uses the local `Qwen3-1.7B Q4_K_M` GGUF model through LLamaSharp and its
+packaged Windows CPU llama.cpp backend. The model is not downloaded or committed to Git.
+Place it exactly at:
+
+```text
+models/qwen/Qwen_Qwen3-1.7B-Q4_K_M.gguf
+```
+
+Model discovery searches upward from the executable directory for that relative path.
+Pressing **Start** loads Qwen once in the background and reuses it across capture sessions.
+No PowerShell command, Ollama, LM Studio, HTTP service, or cloud connection is required.
+If the model is absent or fails to load, the Status panel reports the expected path and
+the app continues in ASR-only mode.
+
+Select **General Movie** for Japanese or English films. Select **Japanese IT Meeting**
+or **English IT Meeting** for technical meetings; these profiles preserve common cloud
+and development terminology. **Additional Context** accepts a short description of the
+current topic. **Show Raw ASR** controls presentation only: raw SenseVoice text is always
+retained internally and is never overwritten. Pressing **Clear** clears both visible
+items and the rolling five-utterance Qwen context without unloading either model.
+
+### Qwen troubleshooting
+
+1. **Qwen model not found:** confirm the exact file name and `models/qwen` directory.
+2. **Native DLL load failure:** use Windows x64 and confirm the LLamaSharp CPU backend files are beside the executable.
+3. **Translation queue grows:** reduce audio activity, shorten Additional Context, or lower context/output-token settings; the bounded queue drops the oldest pending translation while preserving raw ASR.
+4. **ASR works but translation does not:** inspect Status and debug logs; Qwen failure is isolated and does not stop capture or SenseVoice.
+5. **Invalid JSON output:** the raw transcript remains visible and the item shows `Translation error`; the raw Qwen output is logged.
+6. **Translation is slow:** CPU generation depends on hardware. BilinguaFlow uses half the logical processors by default to keep Windows responsive.
+
+## Implemented through Milestone 3
 
 - Resizable, DPI-aware English WPF interface with keyboard-accessible controls
 - Movie, Meeting, and Microphone mode selection
@@ -103,14 +135,16 @@ least 300 ms, followed by a short pause. SenseVoice emits final utterances after
 - Scrollable 500-item transcript, automatic scrolling, timing and RTF diagnostics
 - Missing-model/native-runtime validation and background-worker error isolation
 - Hardware-independent tests for paths, preprocessing, VAD, models, results, and cancellation
+- In-process Qwen3 GGUF loading through llama.cpp/LLamaSharp with deterministic, non-thinking prompts
+- Single-pass correction plus Simplified Chinese translation with defensive JSON parsing
+- Context profiles, editable additional context, and rolling recent-utterance context
+- Bounded serialized LLM queue, overflow/failure isolation, sequence-stable bilingual UI, and latency diagnostics
 
 ## Roadmap
 
 1. Application-specific WASAPI loopback
-2. Qwen3-1.7B Q4 GGUF + llama.cpp integration
-3. Context-aware ASR correction and Simplified Chinese translation
-4. Transparent TopMost bilingual subtitle overlay
-5. Persistent recording and transcript history
-6. SRT, TXT, Markdown, and JSON export
-7. Meeting summaries and action items
-8. MSIX packaging and Microsoft Store preparation
+2. Transparent TopMost bilingual subtitle overlay
+3. Persistent recording and transcript history
+4. SRT, TXT, Markdown, and JSON export
+5. Meeting summaries and action items
+6. MSIX packaging and Microsoft Store preparation

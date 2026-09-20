@@ -48,10 +48,36 @@ public interface ITranscriptionSessionFactory
     ITranscriptionSession Create(CaptureSource source, CaptureMode mode, bool movieDebugMode = false);
 }
 
-public sealed record LlmRequest(string AsrText, SourceLanguage Language, ContextProfile? Context = null);
-public sealed record LlmResult(string CorrectedText, string TranslatedText);
+public sealed record LlmTranslationRequest(
+    long SequenceId,
+    string OriginalText,
+    SourceLanguage SourceLanguage,
+    CaptureMode Mode,
+    CaptureSource Source,
+    ContextProfile Profile,
+    string AdditionalContext,
+    IReadOnlyList<string> RecentUtterances,
+    DateTimeOffset SegmentCompletedAt,
+    TimeSpan AudioDuration,
+    TimeSpan AsrProcessingTime);
 
-public interface ILlmService
+public sealed record LlmTranslationResult(
+    long SequenceId,
+    string OriginalText,
+    string CorrectedText,
+    string TranslatedText,
+    TimeSpan ProcessingTime,
+    TimeSpan QueueWaitTime,
+    TimeSpan EndToEndLatency,
+    bool WasCorrected,
+    bool Success,
+    string? ErrorMessage = null);
+
+public sealed record LlmDiagnostics(int QueueLength, long Completed, long Failed, long MergedOrDropped);
+
+public interface ILlmService : IAsyncDisposable
 {
-    Task<LlmResult> CorrectAndTranslateAsync(LlmRequest request, CancellationToken cancellationToken);
+    bool IsReady { get; }
+    Task InitializeAsync(CancellationToken cancellationToken);
+    Task<LlmTranslationResult> CorrectAndTranslateAsync(LlmTranslationRequest request, CancellationToken cancellationToken);
 }

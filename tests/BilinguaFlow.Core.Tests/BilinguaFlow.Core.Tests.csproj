@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\BilinguaFlow.Core\BilinguaFlow.Core.csproj" />
     <ProjectReference Include="..\..\src\BilinguaFlow.Asr\BilinguaFlow.Asr.csproj" />
+    <ProjectReference Include="..\..\src\BilinguaFlow.Llm\BilinguaFlow.Llm.csproj" />
   </ItemGroup>
 
 </Project>

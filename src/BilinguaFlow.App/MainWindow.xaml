@@ -2,6 +2,7 @@
         Title="BilinguaFlow" Width="780" Height="860" MinWidth="620" MinHeight="680" WindowStartupLocation="CenterScreen"
         Background="{DynamicResource WindowBrush}" UseLayoutRounding="True" SnapsToDevicePixels="True">
     <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
         <Style x:Key="LabelStyle" TargetType="TextBlock"><Setter Property="FontSize" Value="13"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Margin" Value="0,0,0,7"/></Style>
         <Style x:Key="MutedStyle" TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource MutedBrush}"/><Setter Property="FontSize" Value="12"/></Style>
     </Window.Resources>
@@ -12,12 +13,14 @@
             <Border Grid.Row="2" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="10" Padding="24">
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="24"/><ColumnDefinition/></Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="20"/><RowDefinition Height="Auto"/><RowDefinition Height="20"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="20"/><RowDefinition Height="Auto"/><RowDefinition Height="20"/><RowDefinition Height="Auto"/><RowDefinition Height="20"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <StackPanel Grid.Row="0" Grid.ColumnSpan="3"><TextBlock Text="Mode" Style="{StaticResource LabelStyle}"/><ComboBox ItemsSource="{Binding Modes}" SelectedItem="{Binding SelectedMode}" IsEnabled="{Binding CanChangeSettings}" AutomationProperties.Name="Capture mode"/></StackPanel>
                     <StackPanel Grid.Row="2" Grid.Column="0"><TextBlock Text="System Audio" Style="{StaticResource LabelStyle}"/><ComboBox ItemsSource="{Binding OutputDevices}" SelectedItem="{Binding SelectedOutputDevice}" IsEnabled="{Binding NeedsSystemAudio}" AutomationProperties.Name="System audio device"/></StackPanel>
                     <StackPanel Grid.Row="2" Grid.Column="2"><TextBlock Text="Microphone" Style="{StaticResource LabelStyle}"/><ComboBox ItemsSource="{Binding InputDevices}" SelectedItem="{Binding SelectedInputDevice}" IsEnabled="{Binding NeedsMicrophone}" AutomationProperties.Name="Microphone device"/></StackPanel>
-                    <StackPanel Grid.Row="4" Grid.Column="0"><TextBlock Text="Source Language" Style="{StaticResource LabelStyle}"/><ComboBox ItemsSource="{Binding Languages}" SelectedItem="{Binding SelectedLanguage}" IsEnabled="{Binding CanChangeSettings}" AutomationProperties.Name="Source language"/></StackPanel>
+                    <StackPanel Grid.Row="4" Grid.Column="0"><TextBlock Text="Source Language" Style="{StaticResource LabelStyle}"/><ComboBox ItemsSource="{Binding Languages}" SelectedItem="{Binding SelectedLanguage}" IsEnabled="{Binding CanChangeSettings}" AutomationProperties.Name="Source language"/><CheckBox Content="Movie ASR Debug Mode" IsChecked="{Binding MovieAsrDebugMode}" IsEnabled="{Binding CanChangeSettings}" Margin="0,12,0,0" ToolTip="Send conservative non-silent 2–4 second movie-audio chunks to SenseVoice." AutomationProperties.Name="Movie ASR Debug Mode"/></StackPanel>
                     <StackPanel Grid.Row="4" Grid.Column="2"><TextBlock Text="Target Language" Style="{StaticResource LabelStyle}"/><Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3" Height="38" Padding="11,0"><TextBlock Text="Simplified Chinese" VerticalAlignment="Center"/></Border></StackPanel>
+                    <StackPanel Grid.Row="6" Grid.Column="0"><TextBlock Text="Context Profile" Style="{StaticResource LabelStyle}"/><ComboBox ItemsSource="{Binding Profiles}" DisplayMemberPath="Name" SelectedItem="{Binding SelectedProfile}" IsEnabled="{Binding CanChangeSettings}" AutomationProperties.Name="Context profile"/><CheckBox Content="Show Raw ASR" IsChecked="{Binding ShowRawAsr}" Margin="0,12,0,0" AutomationProperties.Name="Show Raw ASR"/></StackPanel>
+                    <StackPanel Grid.Row="6" Grid.Column="2"><TextBlock Text="Additional Context" Style="{StaticResource LabelStyle}"/><TextBox Text="{Binding AdditionalContext, UpdateSourceTrigger=PropertyChanged}" MinHeight="66" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" IsEnabled="{Binding CanChangeSettings}" AutomationProperties.Name="Additional context"/></StackPanel>
                 </Grid>
             </Border>
             <StackPanel Grid.Row="4" Orientation="Horizontal"><Button Content="Start" Command="{Binding StartCommand}" Background="{DynamicResource AccentBrush}" Foreground="White" BorderThickness="0" IsDefault="True"/><Button Content="Stop" Command="{Binding StopCommand}" Margin="12,0,0,0"/><Button Content="Refresh Devices" Command="{Binding RefreshDevicesCommand}" Margin="12,0,0,0"/></StackPanel>
@@ -27,7 +30,7 @@
             <Border Grid.Row="8" Background="#EAF0FF" BorderBrush="#C9D5FF" BorderThickness="1" CornerRadius="8" Padding="16">
                 <StackPanel>
                     <TextBlock Text="{Binding Status, StringFormat=Status: {0}}" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                    <TextBlock Text="{Binding Diagnostics}" Style="{StaticResource MutedStyle}" Margin="0,6,0,0"/>
+                    <TextBlock Text="{Binding Diagnostics}" Style="{StaticResource MutedStyle}" Margin="0,6,0,0" TextWrapping="Wrap"/>
                     <TextBlock Text="{Binding ModelDirectory, StringFormat=Model directory: {0}}" Style="{StaticResource MutedStyle}" Margin="0,3,0,0" TextWrapping="Wrap"/>
                 </StackPanel>
             </Border>
@@ -36,7 +39,7 @@
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="14"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                     <DockPanel Grid.Row="0">
                         <Button Content="Clear" Command="{Binding ClearTranscriptCommand}" DockPanel.Dock="Right" MinWidth="74" MinHeight="32" Padding="12,4"/>
-                        <StackPanel><TextBlock Text="Original Transcript" FontSize="17" FontWeight="SemiBold"/><TextBlock Text="Final SenseVoice utterances" Style="{StaticResource MutedStyle}" Margin="0,3,0,0"/></StackPanel>
+                        <StackPanel><TextBlock Text="Bilingual Transcript" FontSize="17" FontWeight="SemiBold"/><TextBlock Text="Raw ASR, Qwen correction, and Simplified Chinese" Style="{StaticResource MutedStyle}" Margin="0,3,0,0"/></StackPanel>
                     </DockPanel>
                     <ListBox x:Name="TranscriptList" Grid.Row="2" ItemsSource="{Binding TranscriptItems}" MinHeight="220" MaxHeight="340"
                              BorderThickness="0" Background="Transparent" ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Original transcript">
@@ -49,7 +52,12 @@
                                             <TextBlock Text="{Binding Source}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" Margin="10,0,0,0"/>
                                             <TextBlock Text="{Binding Language}" Foreground="{DynamicResource MutedBrush}" Margin="8,0,0,0"/>
                                         </StackPanel>
-                                        <TextBlock Text="{Binding Text}" FontSize="16" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                                        <StackPanel Visibility="{Binding DataContext.ShowRawAsr, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}" Margin="0,7,0,0">
+                                            <TextBlock Text="Raw ASR" Style="{StaticResource MutedStyle}"/><TextBlock Text="{Binding RawText}" FontSize="15" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                        <TextBlock Text="Corrected Original" Style="{StaticResource MutedStyle}" Margin="0,7,0,0"/><TextBlock Text="{Binding CorrectedText}" FontSize="16" TextWrapping="Wrap"/>
+                                        <TextBlock Text="Chinese" Style="{StaticResource MutedStyle}" Margin="0,7,0,0"/><TextBlock Text="{Binding TranslatedText}" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                        <TextBlock Text="{Binding LlmStatus}" Style="{StaticResource MutedStyle}" Margin="0,5,0,0"/>
                                         <TextBlock Text="{Binding Performance}" Style="{StaticResource MutedStyle}" Margin="0,4,0,0"/>
                                     </StackPanel>
                                 </Border>

@@ -24,6 +24,69 @@ public sealed class EnergyVadSegmenterTests
         Assert.Equal(250, profile.PreRollMilliseconds);
         Assert.Equal(250, profile.PostRollMilliseconds);
         Assert.Equal(12_000, profile.MaximumSegmentMilliseconds);
+        Assert.False(profile.UseZeroCrossingHeuristic);
+        Assert.True(profile.EnableActivityFallback);
+        Assert.Equal(3_000, profile.ActivityFlushMilliseconds);
+    }
+
+    [Fact]
+    public void MovieFallback_SubmitsMeaningfulAudioAtThreeSeconds()
+    {
+        var options = TestOptions with
+        {
+            UseZeroCrossingHeuristic = false,
+            EnableActivityFallback = true,
+            ActivityFlushMilliseconds = 3_000,
+            MeaningfulAudioRms = 0.003f
+        };
+        var sut = new EnergyVadSegmenter(options);
+
+        var segment = Assert.Single(sut.Process(Speech(3_000)));
+
+        Assert.Equal(SegmentSubmissionReason.Timeout, segment.SubmissionReason);
+        Assert.InRange(segment.Duration.TotalSeconds, 2.99, 3.01);
+        Assert.True(segment.Rms > 0.1f);
+    }
+
+    [Fact]
+    public void MovieDebugMode_SubmitsFixedNonSilentChunk()
+    {
+        var profile = SegmentationProfiles.For(CaptureMode.Movie, CaptureSource.System, movieDebugMode: true) with
+        {
+            SampleRate = 1_000,
+            FrameMilliseconds = 20
+        };
+        var sut = new EnergyVadSegmenter(profile);
+
+        var segment = Assert.Single(sut.Process(Speech(2_500)));
+
+        Assert.Equal(SegmentSubmissionReason.DebugChunk, segment.SubmissionReason);
+        Assert.InRange(segment.Duration.TotalSeconds, 2.49, 2.51);
+    }
+
+    [Fact]
+    public void MovieFallback_DoesNotSubmitPureSilence()
+    {
+        var options = TestOptions with { EnableActivityFallback = true, ActivityFlushMilliseconds = 3_000 };
+        var sut = new EnergyVadSegmenter(options);
+
+        Assert.Empty(sut.Process(Silence(4_000)));
+        Assert.Empty(sut.Flush());
+    }
+
+    [Fact]
+    public void MovieFallback_WallClockTimeoutFlushesWhenCallbacksStop()
+    {
+        var clock = new ManualTimeProvider();
+        var options = TestOptions with { EnableActivityFallback = true, ActivityFlushMilliseconds = 3_000 };
+        var sut = new EnergyVadSegmenter(options, clock);
+        Assert.Empty(sut.Process(Speech(1_000)));
+
+        clock.Advance(TimeSpan.FromSeconds(3));
+        var segment = Assert.Single(sut.FlushExpired());
+
+        Assert.Equal(SegmentSubmissionReason.Timeout, segment.SubmissionReason);
+        Assert.True(segment.FlushedByTimeout);
     }
 
     [Fact]
