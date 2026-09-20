@@ -15,4 +15,14 @@ public partial class MainWindow : Window
         e.Cancel = true; IsEnabled = false; await ViewModel.DisposeAsync(); _shutdownComplete = true; Close();
     }
     protected override void OnInitialized(EventArgs e) { base.OnInitialized(e); Closing += OnClosing; }
+
+    protected override void OnContentRendered(EventArgs e)
+    {
+        base.OnContentRendered(e);
+        ViewModel.TranscriptItems.CollectionChanged += (_, _) =>
+        {
+            if (ViewModel.TranscriptItems.Count > 0)
+                TranscriptList.ScrollIntoView(ViewModel.TranscriptItems[^1]);
+        };
+    }
 }

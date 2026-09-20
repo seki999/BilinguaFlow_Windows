@@ -2,8 +2,10 @@ using System.IO;
 using System.Windows;
 using BilinguaFlow.App.ViewModels;
 using BilinguaFlow.Audio;
+using BilinguaFlow.Asr;
 using BilinguaFlow.Core.Audio;
 using BilinguaFlow.Infrastructure;
+using BilinguaFlow.Core.Speech;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -18,6 +20,8 @@ public partial class App : Application
         {
             services.AddSingleton<IAudioDeviceService, WasapiAudioDeviceService>();
             services.AddSingleton<IAudioCaptureSessionFactory, AudioCaptureSessionFactory>();
+            services.AddSingleton<ISpeechRecognitionService, SenseVoiceSpeechRecognitionService>();
+            services.AddSingleton<ITranscriptionSessionFactory, TranscriptionSessionFactory>();
             services.AddSingleton<ISystemClock, SystemClock>();
             services.AddSingleton<IRecordingPathFactory>(_ => new RecordingPathFactory(Path.Combine(AppContext.BaseDirectory, "recordings")));
             services.AddSingleton<MainViewModel>();

@@ -2,12 +2,15 @@
 
 Model binaries are intentionally not downloaded or committed.
 
-Planned layout:
+Milestone 2 expects this layout:
 
 ```text
 models/
-  asr/sense-voice-small-int8/   # sherpa-onnx model and tokens
-  llm/qwen3-1.7b-q4/            # GGUF model for llama.cpp
+  sensevoice/
+    model.int8.onnx
+    tokens.txt
+  llm/qwen3-1.7b-q4/            # Future GGUF model for llama.cpp
 ```
 
-Model configuration and validation will be added with their respective milestones.
+Download the SenseVoiceSmall INT8 archive from the official sherpa-onnx model releases,
+then copy only the model and token files above. The application never downloads models.

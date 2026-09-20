@@ -18,6 +18,7 @@ public sealed class WasapiCaptureSession(CaptureSource source, ILogger<WasapiCap
     public bool IsCapturing => _capture is not null;
     public string? RecordingPath { get; private set; }
     public event EventHandler<AudioLevelChangedEventArgs>? LevelChanged;
+    public event EventHandler<AudioChunk>? AudioAvailable;
     public event EventHandler<CaptureStoppedEventArgs>? CaptureStopped;
 
     public async Task StartAsync(AudioDevice device, string recordingPath, CancellationToken cancellationToken)
@@ -79,6 +80,13 @@ public sealed class WasapiCaptureSession(CaptureSource source, ILogger<WasapiCap
             _writer?.Write(e.Buffer, 0, e.BytesRecorded);
             var level = CalculatePeak(e.Buffer.AsSpan(0, e.BytesRecorded), _capture!.WaveFormat);
             LevelChanged?.Invoke(this, new AudioLevelChangedEventArgs(Source, level));
+            if (AudioAvailable is not null)
+            {
+                var format = _capture.WaveFormat;
+                AudioAvailable.Invoke(this, new AudioChunk(Source, e.Buffer.AsSpan(0, e.BytesRecorded).ToArray(),
+                    format.SampleRate, format.Channels, format.BitsPerSample,
+                    format.Encoding == WaveFormatEncoding.IeeeFloat ? AudioSampleEncoding.IeeeFloat : AudioSampleEncoding.Pcm));
+            }
         }
         catch (Exception ex)
         {
