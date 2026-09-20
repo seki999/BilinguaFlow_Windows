@@ -66,6 +66,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     public AudioDevice? SelectedOutputDevice { get => _selectedOutputDevice; set { if (SetProperty(ref _selectedOutputDevice, value)) RaiseCommands(); } }
     public AudioDevice? SelectedInputDevice { get => _selectedInputDevice; set { if (SetProperty(ref _selectedInputDevice, value)) RaiseCommands(); } }
     public bool IsCapturing { get => _isCapturing; private set { if (SetProperty(ref _isCapturing, value)) RaiseCommands(); } }
+    public bool CanChangeSettings => !IsCapturing;
     public string Status { get => _status; private set => SetProperty(ref _status, value); }
     public string Diagnostics { get => _diagnostics; private set => SetProperty(ref _diagnostics, value); }
     public string ModelDirectory => _modelFiles.Directory;
@@ -131,7 +132,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
 
     private async Task StartTranscriptionAsync(CaptureSource source, CancellationToken token)
     {
-        var session = _transcriptionSessionFactory.Create(source);
+        var session = _transcriptionSessionFactory.Create(source, SelectedMode!.Value);
         session.ResultAvailable += OnRecognitionResult;
         session.StatusChanged += OnAsrStatusChanged;
         session.DiagnosticsChanged += OnDiagnosticsChanged;
@@ -232,7 +233,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
         _ => $"ASR initialization failed: {ex.Message}"
     };
     private static void Replace<T>(ObservableCollection<T> target, IEnumerable<T> items) { target.Clear(); foreach (var item in items) target.Add(item); }
-    private void RaiseCommands() { StartCommand.RaiseCanExecuteChanged(); StopCommand.RaiseCanExecuteChanged(); RefreshDevicesCommand.RaiseCanExecuteChanged(); ClearTranscriptCommand.RaiseCanExecuteChanged(); }
+    private void RaiseCommands() { OnPropertyChanged(nameof(CanChangeSettings)); StartCommand.RaiseCanExecuteChanged(); StopCommand.RaiseCanExecuteChanged(); RefreshDevicesCommand.RaiseCanExecuteChanged(); ClearTranscriptCommand.RaiseCanExecuteChanged(); }
 
     public async ValueTask DisposeAsync()
     {

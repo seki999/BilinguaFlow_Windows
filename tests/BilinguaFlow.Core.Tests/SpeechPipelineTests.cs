@@ -34,11 +34,43 @@ public sealed class SpeechPipelineTests
         await session.StopAsync(false).WaitAsync(TimeSpan.FromSeconds(2));
     }
 
+    [Fact]
+    public async Task Session_PropagatesSelectedJapaneseLanguageToRecognizerAndResult()
+    {
+        var recognizer = new FakeRecognizer { ResultText = "テスト" };
+        await using var session = new TranscriptionSession(CaptureSource.System, recognizer,
+            NullLogger<TranscriptionSession>.Instance, new SpeechSegmentationOptions(MinimumZeroCrossingRate: 0));
+        RecognitionResult? result = null;
+        session.ResultAvailable += (_, value) => result = value;
+        await session.StartAsync(SourceLanguage.Japanese, CancellationToken.None);
+        Assert.True(session.TryEnqueue(CreateFloatChunk(
+            Enumerable.Repeat(0.2f, 16_000 * 2).Concat(new float[16_000]).ToArray())));
+
+        await session.StopAsync(true).WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(SourceLanguage.Japanese, recognizer.LastLanguage);
+        Assert.NotNull(result);
+        Assert.Equal("Japanese", result.Language);
+    }
+
+    private static AudioChunk CreateFloatChunk(float[] samples)
+    {
+        var bytes = new byte[samples.Length * sizeof(float)];
+        Buffer.BlockCopy(samples, 0, bytes, 0, bytes.Length);
+        return new AudioChunk(CaptureSource.System, bytes, 16_000, 1, 32, AudioSampleEncoding.IeeeFloat);
+    }
+
     private sealed class FakeRecognizer : ISpeechRecognitionService
     {
         public bool IsInitialized => true;
+        public string ResultText { get; init; } = string.Empty;
+        public SourceLanguage? LastLanguage { get; private set; }
         public Task<TimeSpan> InitializeAsync(SenseVoiceModelFiles files, SourceLanguage language, CancellationToken cancellationToken) => Task.FromResult(TimeSpan.Zero);
-        public Task<string> RecognizeAsync(float[] samples, SourceLanguage language, CancellationToken cancellationToken) => Task.FromResult(string.Empty);
+        public Task<string> RecognizeAsync(float[] samples, SourceLanguage language, CancellationToken cancellationToken)
+        {
+            LastLanguage = language;
+            return Task.FromResult(ResultText);
+        }
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }

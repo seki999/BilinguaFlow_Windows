@@ -12,6 +12,7 @@ public sealed class TranscriptionSession : ITranscriptionSession
     private const int Capacity = 64;
     private readonly ISpeechRecognitionService _recognizer;
     private readonly ILogger<TranscriptionSession> _logger;
+    private readonly SpeechSegmentationOptions _segmentationOptions;
     private readonly AudioPreprocessor _preprocessor = new();
     private Channel<AudioChunk>? _channel;
     private CancellationTokenSource? _cancellation;
@@ -20,8 +21,11 @@ public sealed class TranscriptionSession : ITranscriptionSession
     private int _queueLength;
     private long _dropped;
 
-    public TranscriptionSession(CaptureSource source, ISpeechRecognitionService recognizer, ILogger<TranscriptionSession> logger)
-    { Source = source; _recognizer = recognizer; _logger = logger; }
+    private int _queueWarningIssued;
+
+    public TranscriptionSession(CaptureSource source, ISpeechRecognitionService recognizer,
+        ILogger<TranscriptionSession> logger, SpeechSegmentationOptions? segmentationOptions = null)
+    { Source = source; _recognizer = recognizer; _logger = logger; _segmentationOptions = segmentationOptions ?? new(); }
 
     public CaptureSource Source { get; }
     public event EventHandler<RecognitionResult>? ResultAvailable;
@@ -48,6 +52,7 @@ public sealed class TranscriptionSession : ITranscriptionSession
         if (channel.Writer.TryWrite(chunk))
         {
             Interlocked.Increment(ref _queueLength);
+            WarnIfQueueIsGrowing();
             PublishDiagnostics();
             return true;
         }
@@ -58,17 +63,30 @@ public sealed class TranscriptionSession : ITranscriptionSession
 
     private async Task RunWorkerAsync(CancellationToken cancellationToken)
     {
-        var segmenter = new EnergyVadSegmenter();
+        var segmenter = new EnergyVadSegmenter(_segmentationOptions);
+        segmenter.Diagnostic += OnSegmentationDiagnostic;
         try
         {
-            await foreach (var chunk in _channel!.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            var reader = _channel!.Reader;
+            while (true)
             {
-                Interlocked.Decrement(ref _queueLength);
-                var samples = _preprocessor.ConvertToMono16Khz(chunk);
-                foreach (var utterance in segmenter.Process(samples)) await RecognizeAsync(utterance, cancellationToken).ConfigureAwait(false);
+                AudioChunk chunk;
+                using var pollCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                pollCancellation.CancelAfter(TimeSpan.FromMilliseconds(100));
+                try { chunk = await reader.ReadAsync(pollCancellation.Token).ConfigureAwait(false); }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
+                    foreach (var expired in segmenter.FlushExpired())
+                        await RecognizeAsync(expired, cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+                catch (ChannelClosedException) { break; }
+
+                await ProcessChunkAsync(chunk, segmenter, cancellationToken).ConfigureAwait(false);
+                while (reader.TryRead(out var queuedChunk))
+                    await ProcessChunkAsync(queuedChunk, segmenter, cancellationToken).ConfigureAwait(false);
             }
-            var pending = segmenter.Flush();
-            if (pending is not null) await RecognizeAsync(pending, cancellationToken).ConfigureAwait(false);
+            foreach (var pending in segmenter.Flush()) await RecognizeAsync(pending, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
         catch (Exception ex)
@@ -76,21 +94,48 @@ public sealed class TranscriptionSession : ITranscriptionSession
             _logger.LogError(ex, "ASR worker failed for {Source}", Source);
             StatusChanged?.Invoke(this, $"ASR worker error: {ex.Message}");
         }
+        finally { segmenter.Diagnostic -= OnSegmentationDiagnostic; }
     }
 
-    private async Task RecognizeAsync(float[] utterance, CancellationToken cancellationToken)
+    private async Task ProcessChunkAsync(AudioChunk chunk, EnergyVadSegmenter segmenter, CancellationToken cancellationToken)
     {
-        var duration = TimeSpan.FromSeconds((double)utterance.Length / AudioPreprocessor.TargetSampleRate);
+        Interlocked.Decrement(ref _queueLength);
+        WarnIfQueueIsGrowing();
+        var samples = _preprocessor.ConvertToMono16Khz(chunk);
+        foreach (var utterance in segmenter.Process(samples))
+            await RecognizeAsync(utterance, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task RecognizeAsync(SpeechSegment segment, CancellationToken cancellationToken)
+    {
+        var duration = segment.Duration;
         StatusChanged?.Invoke(this, "Recognizing...");
         var stopwatch = Stopwatch.StartNew();
-        var text = await _recognizer.RecognizeAsync(utterance, _language, cancellationToken).ConfigureAwait(false);
+        var text = await _recognizer.RecognizeAsync(segment.Samples, _language, cancellationToken).ConfigureAwait(false);
         stopwatch.Stop();
-        _logger.LogInformation("Recognized {Source} utterance ({AudioMs} ms) in {ProcessingMs} ms, RTF {Rtf:F2}",
-            Source, duration.TotalMilliseconds, stopwatch.ElapsedMilliseconds, stopwatch.Elapsed.TotalSeconds / duration.TotalSeconds);
+        _logger.LogInformation("Recognized {Source} {Language} utterance ({AudioMs} ms) in {ProcessingMs} ms, RTF {Rtf:F2}, merged {MergedCount}",
+            Source, _language, duration.TotalMilliseconds, stopwatch.ElapsedMilliseconds,
+            stopwatch.Elapsed.TotalSeconds / duration.TotalSeconds, segment.OriginalSegmentCount);
         if (!string.IsNullOrWhiteSpace(text))
             ResultAvailable?.Invoke(this, new RecognitionResult(DateTimeOffset.Now, Source,
-                _language == SourceLanguage.Japanese ? "Japanese" : "English", text, true, duration, stopwatch.Elapsed));
+                _language == SourceLanguage.Japanese ? "Japanese" : "English", text, true, duration,
+                stopwatch.Elapsed, segment.WasMerged, segment.OriginalSegmentCount));
         StatusChanged?.Invoke(this, "Listening...");
+    }
+
+    private void OnSegmentationDiagnostic(object? sender, SegmentationEvent e)
+    {
+        if (e.IsRejection) _logger.LogDebug("{Source}: {Message}", Source, e.Message);
+        else _logger.LogInformation("{Source}: {Message}", Source, e.Message);
+    }
+
+    private void WarnIfQueueIsGrowing()
+    {
+        var length = Volatile.Read(ref _queueLength);
+        if (length >= Capacity * 3 / 4 && Interlocked.Exchange(ref _queueWarningIssued, 1) == 0)
+            _logger.LogWarning("{Source} ASR queue is growing: {QueueLength}/{Capacity}", Source, length, Capacity);
+        else if (length < Capacity / 2)
+            Interlocked.Exchange(ref _queueWarningIssued, 0);
     }
 
     private void PublishDiagnostics() => DiagnosticsChanged?.Invoke(this,

@@ -9,12 +9,21 @@ public sealed record SenseVoiceModelFiles(string Directory, string ModelPath, st
 }
 
 public sealed record RecognitionResult(DateTimeOffset Timestamp, CaptureSource Source, string Language, string Text,
-    bool IsFinal, TimeSpan AudioDuration, TimeSpan ProcessingTime)
+    bool IsFinal, TimeSpan AudioDuration, TimeSpan ProcessingTime, bool WasMerged = false, int OriginalSegmentCount = 1)
 {
     public double RealTimeFactor => AudioDuration.TotalSeconds <= 0 ? 0 : ProcessingTime.TotalSeconds / AudioDuration.TotalSeconds;
 }
 
-public sealed record TranscriptionDiagnostics(int QueueLength, long DroppedAudioChunks, TimeSpan? InitializationTime = null);
+public sealed record TranscriptionDiagnostics(
+    int QueueLength,
+    long DroppedAudioChunks,
+    long CapturedAudioChunks = 0,
+    long SpeechSegmentsDetected = 0,
+    long RejectedSegments = 0,
+    long BufferedSegments = 0,
+    long SubmittedSegments = 0,
+    long CompletedRecognitions = 0,
+    TimeSpan? InitializationTime = null);
 
 public interface ISpeechRecognitionService : IAsyncDisposable
 {
@@ -36,7 +45,7 @@ public interface ITranscriptionSession : IAsyncDisposable
 
 public interface ITranscriptionSessionFactory
 {
-    ITranscriptionSession Create(CaptureSource source);
+    ITranscriptionSession Create(CaptureSource source, CaptureMode mode, bool movieDebugMode = false);
 }
 
 public sealed record LlmRequest(string AsrText, SourceLanguage Language, ContextProfile? Context = null);

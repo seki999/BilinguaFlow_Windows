@@ -78,7 +78,9 @@ least 300 ms, followed by a short pause. SenseVoice emits final utterances after
 1. **No System Audio level:** select the same Windows playback device currently used by the movie.
 2. **Audio level moves but no transcript:** verify both model files, speak/play a complete utterance, and inspect ASR diagnostics/logs.
 3. **Native library error:** verify the application runs as x64 and that the sherpa-onnx runtime files were copied beside the build output.
-4. **Transcript is delayed:** SenseVoice is utterance-based; recognition begins after end-of-speech silence or the 12-second maximum segment.
+4. **Transcript is delayed:** Movie Mode intentionally waits through 900 ms of endpoint
+   silence and may hold short speech for up to a 1.2 second merge window. Recognition
+   also starts at the 12-second maximum segment.
 
 ## Implemented through Milestone 2
 
@@ -91,7 +93,12 @@ least 300 ms, followed by a short pause. SenseVoice emits final utterances after
 - Replaceable ASR/LLM contracts plus context-profile data model
 - SenseVoiceSmall INT8 recognition through official sherpa-onnx C# bindings
 - PCM 16/24/32-bit and float32 mono conversion plus 16 kHz resampling
-- Configurable energy VAD (300 ms minimum, 650 ms endpoint, 12 second maximum)
+- Mode-specific configurable VAD profiles with adaptive noise floor and a basic
+  zero-crossing speech heuristic
+- Movie Mode stabilization: 500 ms minimum speech, 1.2 second recognition minimum,
+  900 ms endpoint silence, 1.2 second merge window, 250 ms pre/post-roll, and a
+  12 second maximum segment
+- Short-utterance buffering, nearby-fragment merging, timeout flush, and Stop flush
 - Independent Remote/Microphone ASR queues with final-result labels
 - Scrollable 500-item transcript, automatic scrolling, timing and RTF diagnostics
 - Missing-model/native-runtime validation and background-worker error isolation

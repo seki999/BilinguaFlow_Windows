@@ -17,5 +17,6 @@ public sealed record TranscriptItemViewModel(
         result.Language,
         result.Text,
         result.IsFinal,
-        $"{result.AudioDuration.TotalSeconds:F1}s audio · {result.ProcessingTime.TotalSeconds:F1}s ASR · RTF {result.RealTimeFactor:F2}");
+        $"{result.AudioDuration.TotalSeconds:F1}s audio · {result.Language} · {result.ProcessingTime.TotalSeconds:F1}s ASR · " +
+        $"RTF {result.RealTimeFactor:F2} · " + (result.WasMerged ? $"merged: {result.OriginalSegmentCount}" : "merged: no (1)"));
 }

@@ -13,10 +13,10 @@
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="24"/><ColumnDefinition/></Grid.ColumnDefinitions>
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="20"/><RowDefinition Height="Auto"/><RowDefinition Height="20"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                    <StackPanel Grid.Row="0" Grid.ColumnSpan="3"><TextBlock Text="Mode" Style="{StaticResource LabelStyle}"/><ComboBox ItemsSource="{Binding Modes}" SelectedItem="{Binding SelectedMode}" AutomationProperties.Name="Capture mode"/></StackPanel>
+                    <StackPanel Grid.Row="0" Grid.ColumnSpan="3"><TextBlock Text="Mode" Style="{StaticResource LabelStyle}"/><ComboBox ItemsSource="{Binding Modes}" SelectedItem="{Binding SelectedMode}" IsEnabled="{Binding CanChangeSettings}" AutomationProperties.Name="Capture mode"/></StackPanel>
                     <StackPanel Grid.Row="2" Grid.Column="0"><TextBlock Text="System Audio" Style="{StaticResource LabelStyle}"/><ComboBox ItemsSource="{Binding OutputDevices}" SelectedItem="{Binding SelectedOutputDevice}" IsEnabled="{Binding NeedsSystemAudio}" AutomationProperties.Name="System audio device"/></StackPanel>
                     <StackPanel Grid.Row="2" Grid.Column="2"><TextBlock Text="Microphone" Style="{StaticResource LabelStyle}"/><ComboBox ItemsSource="{Binding InputDevices}" SelectedItem="{Binding SelectedInputDevice}" IsEnabled="{Binding NeedsMicrophone}" AutomationProperties.Name="Microphone device"/></StackPanel>
-                    <StackPanel Grid.Row="4" Grid.Column="0"><TextBlock Text="Source Language" Style="{StaticResource LabelStyle}"/><ComboBox ItemsSource="{Binding Languages}" SelectedItem="{Binding SelectedLanguage}" AutomationProperties.Name="Source language"/></StackPanel>
+                    <StackPanel Grid.Row="4" Grid.Column="0"><TextBlock Text="Source Language" Style="{StaticResource LabelStyle}"/><ComboBox ItemsSource="{Binding Languages}" SelectedItem="{Binding SelectedLanguage}" IsEnabled="{Binding CanChangeSettings}" AutomationProperties.Name="Source language"/></StackPanel>
                     <StackPanel Grid.Row="4" Grid.Column="2"><TextBlock Text="Target Language" Style="{StaticResource LabelStyle}"/><Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3" Height="38" Padding="11,0"><TextBlock Text="Simplified Chinese" VerticalAlignment="Center"/></Border></StackPanel>
                 </Grid>
             </Border>
